@@ -36,6 +36,8 @@ extern f32 gSineTable[];
 
 #define sqr(x) ((x) * (x))
 
+#define abs(x) ((x) < 0 ? -(x) : (x))
+
 s32 approach_s32(s32 a, s32 b, s32 c, s32 d);
 f32 approach_f32(f32 a, f32 b, f32 c, f32 d);
 s16 atan2s(f32 a, f32 b);
