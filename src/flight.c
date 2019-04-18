@@ -140,13 +140,13 @@ static void update_flying(struct MarioState *m)
     m->vel[2] = m->forwardVel * coss(m->faceAngle[0]) * coss(m->faceAngle[1]);
 }
 
-static s32 act_flying(struct MarioState *m)
+static s32 act_flying(struct MarioState *m, s32 downTilt)
 {
     update_flying(m);
 
     m->pos[1] += m->vel[1];
 
-    if (FALSE) {
+    if (downTilt) {
         m->faceAngle[0] -= 0x200;
         if (m->faceAngle[0] < -0x2AAA)
             m->faceAngle[0] = -0x2AAA;
@@ -300,6 +300,11 @@ static s16 approach_pitch_vel(s16 pitchVel, s16 targetPitchVel)
     return pitchVel;
 }
 
+static f32 approach_pitch_vel_stick_y(struct MarioState *m, s16 targetPitchVel) {
+    f32 stickY = -(f32)targetPitchVel * 5.0f / m->forwardVel;
+    return min(max(stickY, -64.0f), 64.0f);
+}
+
 
 static f32 energy(struct MarioState *m) {
     return m->forwardVel * m->forwardVel + 4.0f / 3.141592653f * m->pos[1];
@@ -440,7 +445,7 @@ static void run(struct MarioState *m) {
     f32 maxY = -1000000;
 
     // while (TRUE) {
-    while (frame < 30000) {
+    while (frame < 3000000) {
         s16 targetPitchVel;
         if (phase == 1) {
             targetPitchVel = pitch_vel_for_move_pitch(m, 0x11B0);
@@ -451,9 +456,11 @@ static void run(struct MarioState *m) {
             // }
             targetPitchVel = constrain_target_pitch_vel(m, targetPitchVel);
 
-            m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
+            // m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
+            m->controller->stickY = approach_pitch_vel_stick_y(m, targetPitchVel);
 
-            act_flying_no_control(m, TRUE);
+            act_flying(m, TRUE);
+
             if (m->forwardVel < 40.0f) {
                 phase = -1;
                 // m->angleVel[0] = 0;
@@ -463,9 +470,10 @@ static void run(struct MarioState *m) {
             targetPitchVel = pitch_vel_for_move_pitch(m, -0x2AAA);
             targetPitchVel = constrain_target_pitch_vel(m, targetPitchVel);
 
-            m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
+            // m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
+            m->controller->stickY = approach_pitch_vel_stick_y(m, targetPitchVel);
 
-            act_flying_no_control(m, TRUE);
+            act_flying(m, TRUE);
 
             if (m->pos[1] < max(maxY - 3050.0f, 0) - 100.0f) {
                 phase = 1;
