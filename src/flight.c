@@ -333,8 +333,9 @@ static void run(struct MarioState *m) {
     s16 pitchVel = 0;
     s16 pitchAcc = 0x20;
     // s16 maxVel = 0x100;
+    f32 minY = 0;
 
-    while (frame < 10000) {
+    while (frame < 100000) {
         if (phase == 1) {
             f32 maxTargVel = max(64.0f * (m->forwardVel / 5.0f) - 0x200, 0);
             pitchVel = approach_s32(pitchVel, maxTargVel, pitchAcc, pitchAcc);
@@ -343,7 +344,7 @@ static void run(struct MarioState *m) {
             if (m->forwardVel < 40.0f) {
                 phase = -1;
                 pitchVel = 0;
-                printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
+                printf("Frame %d: y = %f, v = %f, miny = %f\n", frame, m->pos[1], m->forwardVel, minY);
             }
         } else {
             f32 maxTargVel = max(64.0f * (m->forwardVel / 5.0f) - (m->forwardVel - 32)*6, 0);
@@ -359,6 +360,10 @@ static void run(struct MarioState *m) {
 
         frame += 1;
         // printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
+
+        if (m->pos[1] < minY) {
+            minY = m->pos[1];
+        }
     }
 }
 
