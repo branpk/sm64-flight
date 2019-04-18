@@ -289,30 +289,68 @@ static void target_pitch(struct MarioState *m, s16 targetPitch) {
 //     }
 // }
 
-// INSTANT PITCH CHANGE
+// // INSTANT PITCH CHANGE
+// static void run(struct MarioState *m) {
+//     s32 frame = 0;
+
+//     m->pos[1] = 0.0f;
+//     m->forwardVel = 50.0f;
+
+//     int phase = 1;
+//     s16 movePitch = 0;
+//     s16 maxChange = 0x200;
+
+//     while (frame < 10000) {
+//         if (phase == 1) {
+//             movePitch = approach_s32(movePitch, 0x11B0, maxChange, maxChange);
+//             act_flying_controlled(m, movePitch, TRUE);
+//             if (m->forwardVel < 20.0f) {
+//                 phase = -1;
+//                 printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
+//             }
+//         } else {
+//             movePitch = approach_s32(movePitch, -0x2AAA, maxChange, maxChange);
+//             act_flying_controlled(m, movePitch, TRUE);
+//             if (m->pos[1] < -7500.0f) {
+//                 phase = 1;
+//                 // printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
+//             }
+//         }
+
+//         frame += 1;
+//         // printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
+//     }
+// }
+
 static void run(struct MarioState *m) {
     s32 frame = 0;
 
     m->pos[1] = 0.0f;
     m->forwardVel = 50.0f;
 
-    int phase = 1;
+    int phase = -1;
     s16 movePitch = 0;
-    s16 maxChange = 0x200;
+    s16 pitchVel = 0;
+    s16 pitchAcc = 0x20;
+    // s16 maxVel = 0x100;
 
     while (frame < 10000) {
         if (phase == 1) {
-            movePitch = approach_s32(movePitch, 0x11B0, maxChange, maxChange);
+            pitchVel = approach_s32(pitchVel, 64.0f * (m->forwardVel / 5.0f), pitchAcc, pitchAcc);
+            movePitch = approach_s32(movePitch, 0x11B0, pitchVel, pitchVel);
             act_flying_controlled(m, movePitch, TRUE);
             if (m->forwardVel < 20.0f) {
                 phase = -1;
+                pitchVel = 0;
                 printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
             }
         } else {
-            movePitch = approach_s32(movePitch, -0x2AAA, maxChange, maxChange);
+            pitchVel = approach_s32(pitchVel, 64.0f * (m->forwardVel / 5.0f), pitchAcc, pitchAcc);
+            movePitch = approach_s32(movePitch, -0x2AAA, pitchVel, pitchVel);
             act_flying_controlled(m, movePitch, TRUE);
-            if (m->pos[1] < -7500.0f) {
+            if (m->pos[1] < -2000.0f) {
                 phase = 1;
+                pitchVel = 0;
                 // printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
             }
         }
