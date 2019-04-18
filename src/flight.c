@@ -34,6 +34,45 @@ static void clear_mario_state(struct MarioState *m) {
     m->controller = c;
 }
 
+static void adjust_analog_stick(struct Controller *controller, s16 rawStickX, s16 rawStickY)
+{
+    if (rawStickX < -128 || rawStickX > 127 || rawStickY < -128 || rawStickY > 127) {
+        printf("Bad raw stick: %d %d\n", rawStickX, rawStickY);
+        exit(1);
+    }
+
+    // reset the controller's x and y floats.
+    controller->stickX = 0;
+    controller->stickY = 0;
+
+    // modulate the rawStickX and rawStickY to be the new float values by adding/subtracting 6.
+    if(rawStickX <= -8)
+        controller->stickX = rawStickX + 6;
+
+    if(rawStickX >=  8)
+        controller->stickX = rawStickX - 6;
+
+    if(rawStickY <= -8)
+        controller->stickY = rawStickY + 6;
+
+    if(rawStickY >=  8)
+        controller->stickY = rawStickY - 6;
+
+    // calculate float magnitude from the center by vector length.
+    f32 stickMag = sqrtf(controller->stickX * controller->stickX
+                               + controller->stickY * controller->stickY);
+
+    // magnitude cannot exceed 64.0f: if it does, modify the values appropriately to
+    // flatten the values down to the allowed maximum value.
+    if(stickMag > 64)
+    {
+        controller->stickX  *= 64 / stickMag;
+        controller->stickY  *= 64 / stickMag;
+        stickMag = 64;
+    }
+}
+
+
 
 static void update_flying_yaw(struct MarioState *m)
 {
@@ -142,6 +181,11 @@ static void update_flying(struct MarioState *m)
 
 static s32 act_flying(struct MarioState *m, s32 downTilt)
 {
+    if (m->controller->stickY < -64 || m->controller->stickY > 64) {
+        printf("Invalid stickY = %f\n", m->controller->stickY);
+        exit(1);
+    }
+
     update_flying(m);
 
     m->pos[1] += m->vel[1];
@@ -300,10 +344,79 @@ static s16 approach_pitch_vel(s16 pitchVel, s16 targetPitchVel)
     return pitchVel;
 }
 
-static f32 approach_pitch_vel_stick_y(struct MarioState *m, s16 targetPitchVel) {
-    f32 stickY = -(f32)targetPitchVel * 5.0f / m->forwardVel;
-    return min(max(stickY, -64.0f), 64.0f);
+
+static f32 raw_stick_to_stick_y(s16 rawStickX, s16 rawStickY)
+{
+    f32 stickX;
+    f32 stickY;
+
+    if (rawStickX < -128 || rawStickX > 127 || rawStickY < -128 || rawStickY > 127) {
+        printf("Bad raw stick: %d %d\n", rawStickX, rawStickY);
+        exit(1);
+    }
+
+    // reset the controller's x and y floats.
+    stickX = 0;
+    stickY = 0;
+
+    // modulate the rawStickX and rawStickY to be the new float values by adding/subtracting 6.
+    if(rawStickX <= -8)
+        stickX = rawStickX + 6;
+
+    if(rawStickX >=  8)
+        stickX = rawStickX - 6;
+
+    if(rawStickY <= -8)
+        stickY = rawStickY + 6;
+
+    if(rawStickY >=  8)
+        stickY = rawStickY - 6;
+
+    // calculate float magnitude from the center by vector length.
+    f32 stickMag = sqrtf(stickX * stickX + stickY * stickY);
+
+    // magnitude cannot exceed 64.0f: if it does, modify the values appropriately to
+    // flatten the values down to the allowed maximum value.
+    if(stickMag > 64)
+    {
+        stickX  *= 64 / stickMag;
+        stickY  *= 64 / stickMag;
+        stickMag = 64;
+    }
+
+    return stickY;
 }
+
+static s16 approach_pitch_vel_raw_stick_y(struct MarioState *m, s16 targetPitchVel) {
+    s16 bestRawStickY;
+    s32 closestDist = 1000000;
+
+    for (int rawStickY = -128; rawStickY < 128; rawStickY++) {
+        f32 stickY = raw_stick_to_stick_y(0, rawStickY);
+        s16 actualPitchVel = -(s16) (stickY * (m->forwardVel / 5.0f));
+        s32 dist = abs(targetPitchVel - actualPitchVel);
+
+        if (dist < closestDist) {
+            bestRawStickY = rawStickY;
+            closestDist = dist;
+        }
+    }
+
+    // f32 stickY = -(f32)targetPitchVel * 5.0f / m->forwardVel;
+    // stickY = min(max(stickY, -64.0f), 64.0f);
+
+    return bestRawStickY;
+}
+
+// static f32 approach_pitch_vel_stick_y(struct MarioState *m, s16 targetPitchVel) {
+//     f32 stickY = -(f32)targetPitchVel * 5.0f / m->forwardVel;
+//     return min(max(stickY, -64.0f), 64.0f);
+// }
+
+// static s16 stick_y_to_raw_stick_y(f32 stickY) {
+//     s16 rawStickY = (s16)((stickY / 64) * 128);
+//     return min(max(rawStickY, -128), 127);
+// }
 
 
 static f32 energy(struct MarioState *m) {
@@ -445,20 +558,14 @@ static void run(struct MarioState *m) {
     f32 maxY = -1000000;
 
     // while (TRUE) {
-    while (frame < 3000000) {
+    while (frame < 30000) {
         s16 targetPitchVel;
         if (phase == 1) {
             targetPitchVel = pitch_vel_for_move_pitch(m, 0x11B0);
             targetPitchVel = max(min(targetPitchVel, 0x264), -0xA0);
-            // targetPitchVel /= 5;
-            // if (m->faceAngle[0] > 0x800 && m->faceAngle[0] < 0x11B0) {
-            //     targetPitchVel = 0;
-            // }
-            targetPitchVel = constrain_target_pitch_vel(m, targetPitchVel);
+            s16 rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
-            // m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
-            m->controller->stickY = approach_pitch_vel_stick_y(m, targetPitchVel);
-
+            adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
 
             if (m->forwardVel < 40.0f) {
@@ -468,17 +575,15 @@ static void run(struct MarioState *m) {
             }
         } else {
             targetPitchVel = pitch_vel_for_move_pitch(m, -0x2AAA);
-            targetPitchVel = constrain_target_pitch_vel(m, targetPitchVel);
+            s16 rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
-            // m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
-            m->controller->stickY = approach_pitch_vel_stick_y(m, targetPitchVel);
-
+            adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
 
             if (m->pos[1] < max(maxY - 3050.0f, 0) - 100.0f) {
                 phase = 1;
                 // m->angleVel[0] = 0;
-                // printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
+                // printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", frame, m->pos[1], m->forwardVel, minY, maxY);
             }
         }
 
