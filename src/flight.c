@@ -557,6 +557,8 @@ static f32 run(struct MarioState *m) {
     f32 minY = 1000000;
     f32 maxY = -1000000;
 
+    f32 startY = m->pos[1];
+
     // while (TRUE) {
     while (frame < 30000) {
         s16 targetPitchVel;
@@ -583,7 +585,7 @@ static f32 run(struct MarioState *m) {
             adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
 
-            if (m->pos[1] < max(maxY - 3050.0f, 0) - 100.0f) {
+            if (m->pos[1] - startY < max(maxY - startY - 3050.0f, 0) - 100.0f) {
                 phase = 1;
                 // m->angleVel[0] = 0;
                 // printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", frame, m->pos[1], m->forwardVel, minY, maxY);
