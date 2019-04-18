@@ -439,6 +439,7 @@ static void run(struct MarioState *m) {
     f32 minY = 1000000;
     f32 maxY = -1000000;
 
+    // while (TRUE) {
     while (frame < 30000) {
         s16 targetPitchVel;
         if (phase == 1) {
@@ -449,8 +450,9 @@ static void run(struct MarioState *m) {
             //     targetPitchVel = 0;
             // }
             targetPitchVel = constrain_target_pitch_vel(m, targetPitchVel);
+
             m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
-            // m->angleVel[0] = pitch_vel_for_move_pitch(m, 0x11B0);
+
             act_flying_no_control(m, TRUE);
             if (m->forwardVel < 40.0f) {
                 phase = -1;
@@ -460,10 +462,12 @@ static void run(struct MarioState *m) {
         } else {
             targetPitchVel = pitch_vel_for_move_pitch(m, -0x2AAA);
             targetPitchVel = constrain_target_pitch_vel(m, targetPitchVel);
+
             m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
-            // m->angleVel[0] = pitch_vel_for_move_pitch(m, -0x2AAA);
+
             act_flying_no_control(m, TRUE);
-            if (m->pos[1] < -100.0f) {
+
+            if (m->pos[1] < max(maxY - 3050.0f, 0) - 100.0f) {
                 phase = 1;
                 // m->angleVel[0] = 0;
                 // printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
