@@ -326,27 +326,29 @@ static void run(struct MarioState *m) {
     s32 frame = 0;
 
     m->pos[1] = 0.0f;
-    m->forwardVel = 50.0f;
+    m->forwardVel = 100.0f;
 
     int phase = -1;
     s16 movePitch = 0;
     s16 pitchVel = 0;
-    s16 pitchAcc = 0x20;
+    // s16 pitchAcc = 10000;
     // s16 maxVel = 0x100;
 
     while (frame < 10000) {
         if (phase == 1) {
-            pitchVel = approach_s32(pitchVel, 64.0f * (m->forwardVel / 5.0f), pitchAcc, pitchAcc);
+            pitchVel = max(64.0f * (m->forwardVel / 5.0f) - 0x200, 0);
+            // pitchVel = approach_s32(pitchVel, 64.0f * (m->forwardVel / 5.0f), pitchAcc, pitchAcc);
             movePitch = approach_s32(movePitch, 0x11B0, pitchVel, pitchVel);
             act_flying_controlled(m, movePitch, TRUE);
-            if (m->forwardVel < 20.0f) {
+            if (m->forwardVel < 40.0f) {
                 phase = -1;
                 pitchVel = 0;
                 printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
             }
         } else {
-            pitchVel = approach_s32(pitchVel, 64.0f * (m->forwardVel / 5.0f), pitchAcc, pitchAcc);
-            movePitch = approach_s32(movePitch, -0x2AAA, pitchVel, pitchVel);
+            pitchVel = 64.0f * (m->forwardVel / 5.0f);
+            // pitchVel = approach_s32(pitchVel, 64.0f * (m->forwardVel / 5.0f), pitchAcc, pitchAcc);
+            movePitch = approach_s32(movePitch, -0x2AAA - 0x200, pitchVel, pitchVel);
             act_flying_controlled(m, movePitch, TRUE);
             if (m->pos[1] < -2000.0f) {
                 phase = 1;
@@ -382,3 +384,4 @@ int main(void) {
 // For maximizing height gained vs speed lost, use movement pitch 0x11B0
 // (This won't actually maximize total height gained from a given speed - that
 // is more complicated I think)
+// Without 0x200 tilt, it's 0x17F0
