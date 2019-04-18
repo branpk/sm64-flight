@@ -259,6 +259,11 @@ static s32 pitch_vel_for_move_pitch(struct MarioState *m, s16 movePitch) {
     return movePitch - pitch;
 }
 
+static s16 constrain_target_pitch_vel(struct MarioState *m, s16 targetPitchVel) {
+    s16 maxv = (s16)(64.0f * (m->forwardVel / 5.0f));
+    s16 minv = (s16)(-64.0f * (m->forwardVel / 5.0f));
+    return min(max(targetPitchVel, minv), maxv);
+}
 
 static s16 approach_pitch_vel(s16 pitchVel, s16 targetPitchVel)
 {
@@ -443,6 +448,7 @@ static void run(struct MarioState *m) {
             // if (m->faceAngle[0] > 0x800 && m->faceAngle[0] < 0x11B0) {
             //     targetPitchVel = 0;
             // }
+            targetPitchVel = constrain_target_pitch_vel(m, targetPitchVel);
             m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
             // m->angleVel[0] = pitch_vel_for_move_pitch(m, 0x11B0);
             act_flying_no_control(m, TRUE);
@@ -453,6 +459,7 @@ static void run(struct MarioState *m) {
             }
         } else {
             targetPitchVel = pitch_vel_for_move_pitch(m, -0x2AAA);
+            targetPitchVel = constrain_target_pitch_vel(m, targetPitchVel);
             m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
             // m->angleVel[0] = pitch_vel_for_move_pitch(m, -0x2AAA);
             act_flying_no_control(m, TRUE);
