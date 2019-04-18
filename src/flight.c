@@ -6,6 +6,9 @@
 #include "math_util.h"
 
 
+#define PRINTF_HEX(x) ((x) < 0 ? "-" : ""), ((x) < 0 ? -(x) : (x))
+
+
 struct Controller
 {
   /*0x04*/ float stickX;        // [-64, 64] positive is right
@@ -20,6 +23,8 @@ struct MarioState
     /*0x48*/ Vec3f vel;
     /*0x54*/ f32 forwardVel;
     /*0x9C*/ struct Controller *controller;
+
+    s16 movePitch;
 };
 
 static void clear_mario_state(struct MarioState *m) {
@@ -198,6 +203,99 @@ static s32 act_flying_controlled(struct MarioState *m, s16 movementPitch, s32 do
 }
 
 
+static void update_flying_no_control(struct MarioState *m)
+{
+    m->forwardVel -= 2.0f * ((f32) m->faceAngle[0] / 0x4000) + 0.1f;
+    m->forwardVel -= 0.5f * (1.0f - coss(m->angleVel[1]));
+
+    if (m->forwardVel < 0.0f)
+        m->forwardVel = 0.0f;
+
+    if (m->forwardVel > 16.0f)
+        m->faceAngle[0] += (m->forwardVel - 32.0f) * 6.0f;
+    else if (m->forwardVel > 4.0f)
+        m->faceAngle[0] += (m->forwardVel - 32.0f) * 10.0f;
+    else
+        m->faceAngle[0] -= 0x400;
+
+    m->faceAngle[0] += m->angleVel[0];
+
+    if (m->faceAngle[0] > 0x2AAA)
+        m->faceAngle[0] = 0x2AAA;
+    if (m->faceAngle[0] < -0x2AAA)
+        m->faceAngle[0] = -0x2AAA;
+
+    m->movePitch = m->faceAngle[0];
+
+    m->vel[0] = m->forwardVel * coss(m->faceAngle[0]) * sins(m->faceAngle[1]);
+    m->vel[1] = m->forwardVel * sins(m->faceAngle[0]);
+    m->vel[2] = m->forwardVel * coss(m->faceAngle[0]) * coss(m->faceAngle[1]);
+}
+
+static s32 act_flying_no_control(struct MarioState *m, s32 downTilt)
+{
+    update_flying_no_control(m);
+
+    m->pos[1] += m->vel[1];
+
+    if (downTilt) {
+        m->faceAngle[0] -= 0x200;
+        if (m->faceAngle[0] < -0x2AAA)
+            m->faceAngle[0] = -0x2AAA;
+    }
+
+    return FALSE;
+}
+
+static s32 pitch_vel_for_move_pitch(struct MarioState *m, s16 movePitch) {
+    s16 pitch = m->faceAngle[0];
+    if (m->forwardVel > 16.0f)
+        pitch += (m->forwardVel - 32.0f) * 6.0f;
+    else if (m->forwardVel > 4.0f)
+        pitch += (m->forwardVel - 32.0f) * 10.0f;
+    else
+        pitch -= 0x400;
+
+    return movePitch - pitch;
+}
+
+
+static s16 approach_pitch_vel(s16 pitchVel, s16 targetPitchVel)
+{
+    if (targetPitchVel > 0)
+    {
+        if (pitchVel < 0)
+        {
+            pitchVel += 0x40;
+            if (pitchVel > 0x20)
+                pitchVel = 0x20;
+        }
+        else
+        {
+            pitchVel = approach_s32(pitchVel, targetPitchVel, 0x20, 0x40);
+        }
+    }
+    else if (targetPitchVel < 0)
+    {
+        if (pitchVel > 0)
+        {
+            pitchVel -= 0x40;
+            if (pitchVel < -0x20)
+                pitchVel = -0x20;
+        }
+        else
+        {
+            pitchVel = approach_s32(pitchVel, targetPitchVel, 0x40, 0x20);
+        }
+    }
+    else
+    {
+        pitchVel = approach_s32(pitchVel, 0, 0x40, 0x40);
+    }
+    return pitchVel;
+}
+
+
 static f32 energy(struct MarioState *m) {
     return m->forwardVel * m->forwardVel + 4.0f / 3.141592653f * m->pos[1];
 }
@@ -328,41 +426,59 @@ static void run(struct MarioState *m) {
     m->pos[1] = 0.0f;
     m->forwardVel = 100.0f;
 
-    int phase = -1;
-    s16 movePitch = 0;
-    s16 pitchVel = 0;
-    s16 pitchAcc = 0x20;
+    s32 phase = -1;
+    // s16 movePitch = 0;
+    // s16 pitchVel = 0;
+    // s16 pitchAcc = 0x20;
     // s16 maxVel = 0x100;
-    f32 minY = 0;
+    f32 minY = 1000000;
+    f32 maxY = -1000000;
 
-    while (frame < 100000) {
+    while (frame < 30000) {
+        s16 targetPitchVel;
         if (phase == 1) {
-            f32 maxTargVel = max(64.0f * (m->forwardVel / 5.0f) - 0x200, 0);
-            pitchVel = approach_s32(pitchVel, maxTargVel, pitchAcc, pitchAcc);
-            movePitch = approach_s32(movePitch, 0x11B0, pitchVel, pitchVel);
-            act_flying_controlled(m, movePitch, TRUE);
+            targetPitchVel = pitch_vel_for_move_pitch(m, 0x11B0);
+            targetPitchVel = max(min(targetPitchVel, 0x264), -0xA0);
+            // targetPitchVel /= 5;
+            // if (m->faceAngle[0] > 0x800 && m->faceAngle[0] < 0x11B0) {
+            //     targetPitchVel = 0;
+            // }
+            m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
+            // m->angleVel[0] = pitch_vel_for_move_pitch(m, 0x11B0);
+            act_flying_no_control(m, TRUE);
             if (m->forwardVel < 40.0f) {
                 phase = -1;
-                pitchVel = 0;
-                printf("Frame %d: y = %f, v = %f, miny = %f\n", frame, m->pos[1], m->forwardVel, minY);
+                // m->angleVel[0] = 0;
+                printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", frame, m->pos[1], m->forwardVel, minY, maxY);
             }
         } else {
-            f32 maxTargVel = max(64.0f * (m->forwardVel / 5.0f) - (m->forwardVel - 32)*6, 0);
-            pitchVel = approach_s32(pitchVel, maxTargVel, pitchAcc, pitchAcc);
-            movePitch = approach_s32(movePitch, -0x2AAA - 0x200, pitchVel, pitchVel);
-            act_flying_controlled(m, movePitch, TRUE);
-            if (m->pos[1] < 0.0f) {
+            targetPitchVel = pitch_vel_for_move_pitch(m, -0x2AAA);
+            m->angleVel[0] = approach_pitch_vel(m->angleVel[0], targetPitchVel);
+            // m->angleVel[0] = pitch_vel_for_move_pitch(m, -0x2AAA);
+            act_flying_no_control(m, TRUE);
+            if (m->pos[1] < -100.0f) {
                 phase = 1;
-                pitchVel = 0;
+                // m->angleVel[0] = 0;
                 // printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
             }
         }
 
         frame += 1;
-        // printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
+        // if (frame % 10 == 0)
+        // printf("%s Frame %d: y = %f, v = %f, pv = %s0x%X, tpv = %s0x%X, mp = %s0x%X\n",
+        //     phase < 0 ? "v" : "^",
+        //     frame,
+        //     m->pos[1],
+        //     m->forwardVel,
+        //     PRINTF_HEX(m->angleVel[0]),
+        //     PRINTF_HEX(targetPitchVel),
+        //     PRINTF_HEX(m->movePitch));
 
         if (m->pos[1] < minY) {
             minY = m->pos[1];
+        }
+        if (m->pos[1] > maxY) {
+            maxY = m->pos[1];
         }
     }
 }
