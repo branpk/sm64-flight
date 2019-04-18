@@ -543,7 +543,7 @@ static void target_pitch(struct MarioState *m, s16 targetPitch) {
 //     }
 // }
 
-static void run(struct MarioState *m) {
+static f32 run(struct MarioState *m) {
     s32 frame = 0;
 
     m->pos[1] = 0.0f;
@@ -561,7 +561,10 @@ static void run(struct MarioState *m) {
     while (frame < 30000) {
         s16 targetPitchVel;
         if (phase == 1) {
-            targetPitchVel = pitch_vel_for_move_pitch(m, 0x11B0);
+            targetPitchVel = pitch_vel_for_move_pitch(m, 0x11C0);
+            if (m->angleVel[0] > 0x200) {
+                targetPitchVel /= 5;
+            }
             targetPitchVel = max(min(targetPitchVel, 0x264), -0xA0);
             s16 rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
@@ -589,14 +592,14 @@ static void run(struct MarioState *m) {
 
         frame += 1;
         // if (frame % 10 == 0)
-        // printf("%s Frame %d: y = %f, v = %f, pv = %s0x%X, tpv = %s0x%X, mp = %s0x%X\n",
+        // printf("%s Frame %d: y = %f, v = %f, p = %s0x%X, pv = %s0x%X, tpv = %s0x%X\n",
         //     phase < 0 ? "v" : "^",
         //     frame,
         //     m->pos[1],
         //     m->forwardVel,
+        //     PRINTF_HEX(m->faceAngle[0]),
         //     PRINTF_HEX(m->angleVel[0]),
-        //     PRINTF_HEX(targetPitchVel),
-        //     PRINTF_HEX(m->movePitch));
+        //     PRINTF_HEX(targetPitchVel));
 
         if (m->pos[1] < minY) {
             minY = m->pos[1];
@@ -605,6 +608,8 @@ static void run(struct MarioState *m) {
             maxY = m->pos[1];
         }
     }
+
+    return maxY;
 }
 
 int main(void) {
