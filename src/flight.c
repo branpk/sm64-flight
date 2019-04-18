@@ -331,13 +331,13 @@ static void run(struct MarioState *m) {
     int phase = -1;
     s16 movePitch = 0;
     s16 pitchVel = 0;
-    // s16 pitchAcc = 10000;
+    s16 pitchAcc = 0x20;
     // s16 maxVel = 0x100;
 
     while (frame < 10000) {
         if (phase == 1) {
-            pitchVel = max(64.0f * (m->forwardVel / 5.0f) - 0x200, 0);
-            // pitchVel = approach_s32(pitchVel, 64.0f * (m->forwardVel / 5.0f), pitchAcc, pitchAcc);
+            f32 maxTargVel = max(64.0f * (m->forwardVel / 5.0f) - 0x200, 0);
+            pitchVel = approach_s32(pitchVel, maxTargVel, pitchAcc, pitchAcc);
             movePitch = approach_s32(movePitch, 0x11B0, pitchVel, pitchVel);
             act_flying_controlled(m, movePitch, TRUE);
             if (m->forwardVel < 40.0f) {
@@ -346,8 +346,8 @@ static void run(struct MarioState *m) {
                 printf("Frame %d: y = %f, v = %f\n", frame, m->pos[1], m->forwardVel);
             }
         } else {
-            pitchVel = 64.0f * (m->forwardVel / 5.0f);
-            // pitchVel = approach_s32(pitchVel, 64.0f * (m->forwardVel / 5.0f), pitchAcc, pitchAcc);
+            f32 maxTargVel = 64.0f * (m->forwardVel / 5.0f);
+            pitchVel = approach_s32(pitchVel, maxTargVel, pitchAcc, pitchAcc);
             movePitch = approach_s32(movePitch, -0x2AAA - 0x200, pitchVel, pitchVel);
             act_flying_controlled(m, movePitch, TRUE);
             if (m->pos[1] < -2000.0f) {
