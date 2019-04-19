@@ -294,7 +294,7 @@ static s32 act_flying_no_control(struct MarioState *m, s32 downTilt)
     return FALSE;
 }
 
-static s32 pitch_vel_for_move_pitch(struct MarioState *m, s16 movePitch) {
+static s32 pitch_offset_for_move_pitch(struct MarioState *m, s16 movePitch) {
     s16 pitch = m->faceAngle[0];
     if (m->forwardVel > 16.0f)
         pitch += (m->forwardVel - 32.0f) * 6.0f;
@@ -304,6 +304,19 @@ static s32 pitch_vel_for_move_pitch(struct MarioState *m, s16 movePitch) {
         pitch -= 0x400;
 
     return movePitch - pitch;
+}
+
+static s32 pitch_vel_for_pitch_offset_pos(s32 offset) {
+    f32 n = (-1.0f + sqrtf(1.0f + (8.0f * offset) / 0x40)) / 2.0f;
+    return (s32)(n * 0x40);
+}
+
+static s32 pitch_vel_for_pitch_offset(s32 offset) {
+    if (offset >= 0) {
+        return pitch_vel_for_pitch_offset_pos(offset);
+    } else {
+        return -pitch_vel_for_pitch_offset_pos(-offset);
+    }
 }
 
 static s16 constrain_target_pitch_vel(struct MarioState *m, s16 targetPitchVel) {
@@ -546,6 +559,8 @@ static void target_pitch(struct MarioState *m, s16 targetPitch) {
 //     }
 // }
 
+// In video: 39798 frames for y = 5629
+
 static f32 run(struct MarioState *m) {
     s32 frame = 0;
 
@@ -565,15 +580,19 @@ static f32 run(struct MarioState *m) {
     f32 startY = m->pos[1];
     s16 rawStickY;
 
+    s32 totalFrames = -1;
+    s16 maxPitch = 0;
+
     // while (TRUE) {
     while (frame < 40000) {
         s16 targetPitchVel;
         if (phase == 1) {
-            targetPitchVel = pitch_vel_for_move_pitch(m, 0x11C0);
-            if (m->angleVel[0] > 0x200) {
-                targetPitchVel /= 5;
-            }
-            targetPitchVel = max(min(targetPitchVel, 0x264), -0xA0);
+            s32 targetOffset = pitch_offset_for_move_pitch(m, 0x11C0);
+            targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
+            // if (m->angleVel[0] > 0x200) {
+            //     targetPitchVel /= 5;
+            // }
+            // targetPitchVel = max(min(targetPitchVel, 0x264), -0xA0);
             rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
             adjust_analog_stick(m->controller, 0, rawStickY);
@@ -582,16 +601,18 @@ static f32 run(struct MarioState *m) {
             if (m->forwardVel < 40.0f) {
                 phase = -1;
                 // m->angleVel[0] = 0;
-                printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", frame, m->pos[1], m->forwardVel, minY, maxY);
+                printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f, maxp: %s0x%X\n", frame, m->pos[1], m->forwardVel, minY, maxY, PRINTF_HEX(maxPitch));
+                maxPitch = 0;
             }
         } else {
-            targetPitchVel = pitch_vel_for_move_pitch(m, -0x2AAA);
+            s32 targetOffset = pitch_offset_for_move_pitch(m, -0x2AAA);
+            targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
             rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
             adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
 
-            if (m->pos[1] - startY < max(maxY - startY - 3050.0f, 0) - 100.0f) {
+            if (m->pos[1] - startY < max(maxY - startY - 3050.0f, 0) - 2500.0f) {
                 phase = 1;
                 // m->angleVel[0] = 0;
                 // printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", frame, m->pos[1], m->forwardVel, minY, maxY);
@@ -616,6 +637,17 @@ static f32 run(struct MarioState *m) {
         if (m->pos[1] > maxY) {
             maxY = m->pos[1];
         }
+        if (m->faceAngle[0] > maxPitch) {
+            maxPitch = m->faceAngle[0];
+        }
+
+        if (maxY >= 5629 && totalFrames < 0) {
+            totalFrames = frame;
+        }
+    }
+
+    if (totalFrames >= 0) {
+        printf("Minutes to 5629: %f\n", (f32)totalFrames / 30 / 60);
     }
 
     return maxY;
