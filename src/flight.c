@@ -560,7 +560,7 @@ static void target_pitch(struct MarioState *m, s16 targetPitch) {
 // }
 
 // In video: 21 min for y = 5629
-// Best: 7.39 minutes
+// Best: 3.97 minutes
 
 static f32 run(struct MarioState *m) {
     s32 frame = 0;
@@ -591,7 +591,7 @@ static f32 run(struct MarioState *m) {
     while (frame < 40000) {
         s16 targetPitchVel;
         if (phase == 1) {
-            s32 targetOffset = pitch_offset_for_move_pitch(m, 0x11C0);
+            s32 targetOffset = pitch_offset_for_move_pitch(m, 0x1280);
             targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
             if (m->angleVel[0] > 0x1B0) {
                 targetPitchVel = 0;
@@ -609,7 +609,7 @@ static f32 run(struct MarioState *m) {
                 maxPitch = 0;
             }
         } else {
-            s32 targetOffset = pitch_offset_for_move_pitch(m, -0x2AAA);
+            s32 targetOffset = pitch_offset_for_move_pitch(m, -0x2AAA + 0x200);
             targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
             rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
