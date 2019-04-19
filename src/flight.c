@@ -559,7 +559,8 @@ static void target_pitch(struct MarioState *m, s16 targetPitch) {
 //     }
 // }
 
-// In video: 39798 frames for y = 5629
+// In video: 21 min for y = 5629
+// Best: 7.39 minutes
 
 static f32 run(struct MarioState *m) {
     s32 frame = 0;
@@ -582,6 +583,9 @@ static f32 run(struct MarioState *m) {
 
     s32 totalFrames = -1;
     s16 maxPitch = 0;
+    s32 printEachFrame = FALSE;
+
+    // printf("%f\n", 2648 - startY);
 
     // while (TRUE) {
     while (frame < 40000) {
@@ -589,9 +593,9 @@ static f32 run(struct MarioState *m) {
         if (phase == 1) {
             s32 targetOffset = pitch_offset_for_move_pitch(m, 0x11C0);
             targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
-            // if (m->angleVel[0] > 0x200) {
-            //     targetPitchVel /= 5;
-            // }
+            if (m->angleVel[0] > 0x1B0) {
+                targetPitchVel = 0;
+            }
             // targetPitchVel = max(min(targetPitchVel, 0x264), -0xA0);
             rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
@@ -612,23 +616,30 @@ static f32 run(struct MarioState *m) {
             adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
 
-            if (m->pos[1] - startY < max(maxY - startY - 3050.0f, 0) - 2500.0f) {
+            if (m->pos[1] - startY < max(maxY - startY - 4200.0f, 0) - 2500.0f) {
                 phase = 1;
                 // m->angleVel[0] = 0;
                 // printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", frame, m->pos[1], m->forwardVel, minY, maxY);
+                maxPitch = 0;
+
+                if (frame > 39700) {
+                    printEachFrame = TRUE;
+                }
             }
         }
 
         frame += 1;
-        // printf("%s Frame %d: sy = %d, y = %f, v = %f, p = %s0x%X, pv = %s0x%X, tpv = %s0x%X\n",
-        //     phase < 0 ? "v" : "^",
-        //     frame,
-        //     rawStickY,
-        //     m->pos[1],
-        //     m->forwardVel,
-        //     PRINTF_HEX(m->faceAngle[0]),
-        //     PRINTF_HEX(m->angleVel[0]),
-        //     PRINTF_HEX(targetPitchVel));
+        if (printEachFrame) {
+            printf("%s Frame %d: sy = %d, y = %f, v = %f, p = %s0x%X, pv = %s0x%X, tpv = %s0x%X\n",
+                phase < 0 ? "v" : "^",
+                frame,
+                rawStickY,
+                m->pos[1],
+                m->forwardVel,
+                PRINTF_HEX(m->faceAngle[0]),
+                PRINTF_HEX(m->angleVel[0]),
+                PRINTF_HEX(targetPitchVel));
+        }
         // fprintf(tasInputs, "0000 00%02x ", (u8)rawStickY);
 
         if (m->pos[1] < minY) {
