@@ -9,6 +9,9 @@
 #define PRINTF_HEX(x) ((x) < 0 ? "-" : ""), ((x) < 0 ? -(x) : (x))
 
 
+static FILE *tasInputs;
+
+
 struct Controller
 {
   /*0x04*/ float stickX;        // [-64, 64] positive is right
@@ -546,8 +549,10 @@ static void target_pitch(struct MarioState *m, s16 targetPitch) {
 static f32 run(struct MarioState *m) {
     s32 frame = 0;
 
-    m->pos[1] = 0.0f;
-    m->forwardVel = 100.0f;
+    *(u32 *)&m->pos[1] = 0xC4C1F742;
+    *(u32 *)&m->forwardVel = 0x42C7CD92;
+    m->faceAngle[0] = -10922;
+    m->angleVel[0] = 0;
 
     s32 phase = -1;
     // s16 movePitch = 0;
@@ -558,9 +563,10 @@ static f32 run(struct MarioState *m) {
     f32 maxY = -1000000;
 
     f32 startY = m->pos[1];
+    s16 rawStickY;
 
     // while (TRUE) {
-    while (frame < 30000) {
+    while (frame < 40000) {
         s16 targetPitchVel;
         if (phase == 1) {
             targetPitchVel = pitch_vel_for_move_pitch(m, 0x11C0);
@@ -568,7 +574,7 @@ static f32 run(struct MarioState *m) {
                 targetPitchVel /= 5;
             }
             targetPitchVel = max(min(targetPitchVel, 0x264), -0xA0);
-            s16 rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
+            rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
             adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
@@ -580,7 +586,7 @@ static f32 run(struct MarioState *m) {
             }
         } else {
             targetPitchVel = pitch_vel_for_move_pitch(m, -0x2AAA);
-            s16 rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
+            rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
             adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
@@ -593,15 +599,16 @@ static f32 run(struct MarioState *m) {
         }
 
         frame += 1;
-        // if (frame % 10 == 0)
-        // printf("%s Frame %d: y = %f, v = %f, p = %s0x%X, pv = %s0x%X, tpv = %s0x%X\n",
+        // printf("%s Frame %d: sy = %d, y = %f, v = %f, p = %s0x%X, pv = %s0x%X, tpv = %s0x%X\n",
         //     phase < 0 ? "v" : "^",
         //     frame,
+        //     rawStickY,
         //     m->pos[1],
         //     m->forwardVel,
         //     PRINTF_HEX(m->faceAngle[0]),
         //     PRINTF_HEX(m->angleVel[0]),
         //     PRINTF_HEX(targetPitchVel));
+        // fprintf(tasInputs, "0000 00%02x ", (u8)rawStickY);
 
         if (m->pos[1] < minY) {
             minY = m->pos[1];
@@ -615,6 +622,8 @@ static f32 run(struct MarioState *m) {
 }
 
 int main(void) {
+    // tasInputs = fopen("tas_inputs.txt", "w");
+
     // Maximize height for speed loss:
     // f32 maxv = 0;
     // for (int p = 0; p < 0x10000; p += 0x10) {
