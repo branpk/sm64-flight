@@ -358,6 +358,38 @@ static f32 pitch_vel_for_pitch(struct MarioState *m, s32 targetPitch) {
     return bestPitchVel;
 }
 
+static f32 max_possible_min_y(struct MarioState *m) {
+    f32 y = m->pos[1];
+    f32 speed = m->forwardVel;
+    s32 pitch = m->faceAngle[0];
+    s32 pitchVel = m->angleVel[0];
+
+    while (TRUE) {
+        pitchVel += 0x40;
+
+        speed -= 2.0f * ((f32) pitch / 0x4000) + 0.1f;
+
+        if (speed > 16.0f)
+            pitch += (speed - 32.0f) * 6.0f;
+        else if (speed > 4.0f)
+            pitch += (speed - 32.0f) * 10.0f;
+        else
+            pitch -= 0x400;
+
+        pitch += pitchVel;
+
+        if (pitch >= 0) {
+            break;
+        }
+
+        y += speed * sins(pitch);
+
+        pitch -= 0x200;
+    }
+
+    return y;
+}
+
 static s16 constrain_target_pitch_vel(struct MarioState *m, s16 targetPitchVel) {
     s16 maxv = (s16)(64.0f * (m->forwardVel / 5.0f));
     s16 minv = (s16)(-64.0f * (m->forwardVel / 5.0f));
@@ -621,6 +653,7 @@ static f32 run(struct MarioState *m) {
     // s16 maxVel = 0x100;
     f32 minY = 1000000;
     f32 maxY = -1000000;
+    f32 lastMaxY = maxY;
 
     f32 startY = m->pos[1];
     s16 rawStickY;
@@ -637,7 +670,7 @@ static f32 run(struct MarioState *m) {
     // printf("%f\n", 2648 - startY);
 
     // while (TRUE) {
-    while (frame < 40000) {
+    while (frame < 15000) {
         f32 targetPitchVel;
         if (phase == 1) {
             // s32 targetOffset = pitch_offset_for_move_pitch(m, 0x1280);
@@ -658,7 +691,9 @@ static f32 run(struct MarioState *m) {
                 // printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f, maxp: %s0x%X\n", frame, m->pos[1], m->forwardVel, minY, maxY, PRINTF_HEX(maxPitch));
                 maxPitch = 0;
 
-                printf("%s Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", phase < 0 ? "v" : "^", frame, m->pos[1], m->forwardVel, minY, maxY);
+                printf("%s Frame %d: y = %f, v = %f, miny = %f, maxy = %f, dmaxy = %f\n", phase < 0 ? "v" : "^", frame, m->pos[1], m->forwardVel, minY, maxY, maxY - lastMaxY);
+                lastMaxY = maxY;
+                // minY = 100000;
 
                 if (frame > 39700) {
                     printEachFrame = TRUE;
@@ -675,7 +710,10 @@ static f32 run(struct MarioState *m) {
 
             // TODO: Play with -2500 for higher sequences
             // if (m->forwardVel > 160) {
-            if (m->pos[1] - startY < max(maxY - startY - 4200.0f, 0) - 2500.0f) {
+            // if (max_possible_min_y_after_down(m) < -6000) {
+            s32 threshold = 4000;
+            if ((maxY < threshold && m->pos[1] - startY < max(maxY - startY - 4200.0f, 0) - 2500.0f) ||
+                (maxY >= threshold && m->pos[1] < -3500)) {
                 phase = 1;
                 // m->angleVel[0] = 0;
                 // printf("%s Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", phase < 0 ? "v" : "^", frame, m->pos[1], m->forwardVel, minY, maxY);
