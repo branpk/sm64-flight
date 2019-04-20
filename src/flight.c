@@ -319,6 +319,45 @@ static s32 pitch_vel_for_pitch_offset(s32 offset) {
     }
 }
 
+static s32 min_pitch_vel_disp(struct MarioState *m, s32 pitchVel) {
+    f32 speed = m->forwardVel;
+    s32 disp = 0;
+
+    while (pitchVel != 0) {
+        if (m->forwardVel > 16.0f)
+            disp += (speed - 32.0f) * 6.0f;
+        else if (m->forwardVel > 4.0f)
+            disp += (speed - 32.0f) * 10.0f;
+        else
+            disp -= 0x400;
+
+        disp += pitchVel;
+
+        disp -= 0x200;
+
+        pitchVel = approach_s32(pitchVel, 0, 0x40, 0x40);
+    }
+
+    return disp;
+}
+
+static f32 pitch_vel_for_pitch(struct MarioState *m, s32 targetPitch) {
+    f32 bestPitchVel = 0;
+    s32 minDist = 100000;
+
+    for (f32 pv = -0x400; pv < 0x400; pv += 1) {
+        f32 disp = min_pitch_vel_disp(m, pv);
+        f32 dist = abs((targetPitch - m->faceAngle[0]) - disp);
+
+        if (dist < minDist) {
+            minDist = dist;
+            bestPitchVel = pv;
+        }
+    }
+
+    return bestPitchVel;
+}
+
 static s16 constrain_target_pitch_vel(struct MarioState *m, s16 targetPitchVel) {
     s16 maxv = (s16)(64.0f * (m->forwardVel / 5.0f));
     s16 minv = (s16)(-64.0f * (m->forwardVel / 5.0f));
@@ -403,7 +442,7 @@ static f32 raw_stick_to_stick_y(s16 rawStickX, s16 rawStickY)
     return stickY;
 }
 
-static s16 approach_pitch_vel_raw_stick_y(struct MarioState *m, s16 targetPitchVel) {
+static s16 approach_pitch_vel_raw_stick_y(struct MarioState *m, f32 targetPitchVel) {
     s16 bestRawStickY;
     s32 closestDist = 1000000;
 
@@ -565,10 +604,12 @@ static void target_pitch(struct MarioState *m, s16 targetPitch) {
 static f32 run(struct MarioState *m) {
     s32 frame = 0;
 
-    *(u32 *)&m->pos[1] = 0xC4C1F742;
-    *(u32 *)&m->forwardVel = 0x42C7CD92;
-    m->faceAngle[0] = -10922;
-    m->angleVel[0] = 0;
+    // First: 2279
+
+    // *(u32 *)&m->pos[1] = 0xC4C1F742;
+    // *(u32 *)&m->forwardVel = 0x42C7CD92;
+    // m->faceAngle[0] = -10922;
+    // m->angleVel[0] =  ;
 
     // m->pos[1] = 0.0f;
     // m->forwardVel = 100.0f;
@@ -588,18 +629,24 @@ static f32 run(struct MarioState *m) {
     s16 maxPitch = 0;
     s32 printEachFrame = FALSE;
 
+    f32 initialY = m->pos[1];
+    f32 initialV = m->forwardVel;
+    s32 initialP = m->faceAngle[0];
+    s32 initialPV = m->angleVel[0];
+
     // printf("%f\n", 2648 - startY);
 
     // while (TRUE) {
     while (frame < 40000) {
-        s16 targetPitchVel;
+        f32 targetPitchVel;
         if (phase == 1) {
-            s32 targetOffset = pitch_offset_for_move_pitch(m, 0x1280);
-            targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
-            if (m->angleVel[0] > 0x240) {
-                targetPitchVel = 0;
-            }
-            // targetPitchVel = max(min(targetPitchVel, 0x264), -0xA0);
+            // s32 targetOffset = pitch_offset_for_move_pitch(m, 0x1280);
+            // targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
+            targetPitchVel = pitch_vel_for_pitch(m, 0x1200);
+            // if (m->angleVel[0] > 0x280) {
+            //     targetPitchVel = 0;
+            // }
+            // targetPitchVel = max(min(targetPitchVel, 0x204), -0x200);
             rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
             adjust_analog_stick(m->controller, 0, rawStickY);
@@ -608,26 +655,31 @@ static f32 run(struct MarioState *m) {
             if (m->forwardVel < 40.0f) {
                 phase = -1;
                 // m->angleVel[0] = 0;
-                printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f, maxp: %s0x%X\n", frame, m->pos[1], m->forwardVel, minY, maxY, PRINTF_HEX(maxPitch));
+                // printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f, maxp: %s0x%X\n", frame, m->pos[1], m->forwardVel, minY, maxY, PRINTF_HEX(maxPitch));
                 maxPitch = 0;
+
+                printf("%s Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", phase < 0 ? "v" : "^", frame, m->pos[1], m->forwardVel, minY, maxY);
+
+                if (frame > 39700) {
+                    printEachFrame = TRUE;
+                }
             }
         } else {
-            s32 targetOffset = pitch_offset_for_move_pitch(m, -0x2AAA + 0x200);
-            targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
+            // s32 targetOffset = pitch_offset_for_move_pitch(m, -0x2AAA + 0x200);
+            // targetPitchVel = pitch_vel_for_pitch_offset(targetOffset);
+            targetPitchVel = pitch_vel_for_pitch(m, -0x2AAA);
             rawStickY = approach_pitch_vel_raw_stick_y(m, targetPitchVel);
 
             adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
 
+            // TODO: Play with -2500 for higher sequences
+            // if (m->forwardVel > 160) {
             if (m->pos[1] - startY < max(maxY - startY - 4200.0f, 0) - 2500.0f) {
                 phase = 1;
                 // m->angleVel[0] = 0;
-                // printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", frame, m->pos[1], m->forwardVel, minY, maxY);
+                // printf("%s Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", phase < 0 ? "v" : "^", frame, m->pos[1], m->forwardVel, minY, maxY);
                 maxPitch = 0;
-
-                if (frame > 39700) {
-                    // printEachFrame = TRUE;
-                }
             }
         }
 
@@ -641,9 +693,9 @@ static f32 run(struct MarioState *m) {
                 m->forwardVel,
                 PRINTF_HEX(m->faceAngle[0]),
                 PRINTF_HEX(m->angleVel[0]),
-                PRINTF_HEX(targetPitchVel));
+                PRINTF_HEX((s16)targetPitchVel));
         }
-        // fprintf(tasInputs, "0000 00%02x ", (u8)rawStickY);
+        fprintf(tasInputs, "0000 00%02x ", (u8)rawStickY);
 
         if (m->pos[1] < minY) {
             minY = m->pos[1];
@@ -660,15 +712,119 @@ static f32 run(struct MarioState *m) {
         }
     }
 
+    printf("\nInitial state:\n");
+    printf("pos y = %f\n", initialY);
+    printf("h speed = %f\n", initialV);
+    printf("pitch = %d\n", initialP);
+    printf("pitch vel = %d\n", initialPV);
+
+    printf("\nSimulated 60 seconds\n");
+
+    if (minY < -8191 + 2048) {
+        printf("Died (initial state might be too low. if you really need this, let me know and I might be able to make it work)\n");
+    } else {
+        printf("max y = %f\n", maxY);
+        printf("Wrote outputs to tas_inputs.txt\n");
+    }
+
     if (totalFrames >= 0) {
-        printf("Minutes to 5629: %f\n", (f32)totalFrames / 30 / 60);
+        printf("\nMinutes to 5629: %f\n", (f32)totalFrames / 30 / 60);
     }
 
     return maxY;
 }
 
-int main(void) {
-    // tasInputs = fopen("tas_inputs.txt", "w");
+s64
+strtol64(const char *nptr, char **endptr, register int base)
+{
+    register const char *s = nptr;
+    register u64 acc;
+    register int c;
+    register u64 cutoff;
+    register int neg = 0, any, cutlim;
+
+    /*
+     * Skip white space and pick up leading +/- sign if any.
+     * If base is 0, allow 0x for hex and 0 for octal, else
+     * assume decimal; if base is already 16, allow 0x.
+     */
+    do {
+        c = *s++;
+    } while (c == ' ');
+    if (c == '-') {
+        neg = 1;
+        c = *s++;
+    } else if (c == '+')
+        c = *s++;
+    if ((base == 0 || base == 16) &&
+        c == '0' && (*s == 'x' || *s == 'X')) {
+        c = s[1];
+        s += 2;
+        base = 16;
+    }
+    if (base == 0)
+        base = c == '0' ? 8 : 10;
+
+    /*
+     * Compute the cutoff value between legal numbers and illegal
+     * numbers.  That is the largest legal value, divided by the
+     * base.  An input number that is greater than this value, if
+     * followed by a legal input character, is too big.  One that
+     * is equal to this value may be valid or not; the limit
+     * between valid and invalid numbers is then based on the last
+     * digit.  For instance, if the range for longs is
+     * [-2147483648..2147483647] and the input base is 10,
+     * cutoff will be set to 214748364 and cutlim to either
+     * 7 (neg==0) or 8 (neg==1), meaning that if we have accumulated
+     * a value > 214748364, or equal but the next digit is > 7 (or 8),
+     * the number is too big, and we will return a range error.
+     *
+     * Set any if any `digits' consumed; make it negative to indicate
+     * overflow.
+     */
+    // cutoff = neg ? -(u64)LONG_MIN : LONG_MAX;
+    // cutlim = cutoff % (u64)base;
+    // cutoff /= (u64)base;
+    for (acc = 0, any = 0;; c = *s++) {
+        if (c >= '0' && c <= '9')
+            c -= '0';
+        else if (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z')
+            c -= (c >= 'A' && c <= 'Z') ? 'A' - 10 : 'a' - 10;
+        else
+            break;
+        if (c >= base)
+            break;
+        // if (any < 0 || acc > cutoff || (acc == cutoff && c > cutlim)) {}
+            // any = -1;
+        // }
+        // else {
+            any = 1;
+            acc *= base;
+            acc += c;
+        // }?
+    }
+    if (any < 0) {
+        // acc = neg ? LONG_MIN : LONG_MAX;
+        // errno = ERANGE;
+    } else if (neg)
+        acc = -acc;
+    if (endptr != 0)
+        *endptr = (char *) (any ? s - 1 : nptr);
+    return (acc);
+}
+
+int main(int argc, char **argv) {
+    if (argc < 5) {
+        printf("usage: flight.exe <posy in hex> <hspeed in hex> <pitch> <pitch vel>\n");
+        exit(1);
+    }
+
+    u32 y = strtol64(argv[1], NULL, 0);
+    u32 v = strtol64(argv[2], NULL, 0);
+    s32 p = strtol64(argv[3], NULL, 0);
+    s32 pv = strtol64(argv[4], NULL, 0);
+
+    tasInputs = fopen("tas_inputs.txt", "w");
 
     // Maximize height for speed loss:
     // f32 maxv = 0;
@@ -683,6 +839,12 @@ int main(void) {
     struct MarioState m = {};
     struct Controller controller = {};
     m.controller = &controller;
+
+    m.pos[1] = *(f32 *)&y;
+    m.forwardVel = *(f32 *)&v;
+    m.faceAngle[0] = p;
+    m.angleVel[0] = pv;
+
     run(&m);
 }
 
