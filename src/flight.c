@@ -646,6 +646,8 @@ static f32 run(struct MarioState *m) {
     // m->pos[1] = 0.0f;
     // m->forwardVel = 100.0f;
 
+    // m->pos[1] -= 500;
+
     s32 phase = -1;
     // s16 movePitch = 0;
     // s16 pitchVel = 0;
@@ -685,7 +687,7 @@ static f32 run(struct MarioState *m) {
             adjust_analog_stick(m->controller, 0, rawStickY);
             act_flying(m, TRUE);
 
-            if (m->forwardVel < 40.0f) {
+            if (m->forwardVel < 30.0f) {
                 phase = -1;
                 // m->angleVel[0] = 0;
                 // printf("Frame %d: y = %f, v = %f, miny = %f, maxy = %f, maxp: %s0x%X\n", frame, m->pos[1], m->forwardVel, minY, maxY, PRINTF_HEX(maxPitch));
@@ -711,9 +713,9 @@ static f32 run(struct MarioState *m) {
             // TODO: Play with -2500 for higher sequences
             // if (m->forwardVel > 160) {
             // if (max_possible_min_y_after_down(m) < -6000) {
-            s32 threshold = 4000;
+            s32 threshold = 3500;
             if ((maxY < threshold && m->pos[1] - startY < max(maxY - startY - 4200.0f, 0) - 2500.0f) ||
-                (maxY >= threshold && m->pos[1] < -3500)) {
+                (maxY >= threshold && m->pos[1] < -3400)) {
                 phase = 1;
                 // m->angleVel[0] = 0;
                 // printf("%s Frame %d: y = %f, v = %f, miny = %f, maxy = %f\n", phase < 0 ? "v" : "^", frame, m->pos[1], m->forwardVel, minY, maxY);
